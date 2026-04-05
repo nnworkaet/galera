@@ -1,0 +1,11 @@
+node_modules/
+.env
+config/topics.json
+config/settings.json
+.tmp/
+.tmp-build/
+nul/
+templates/openclaw-memory/
+templates/SOUL.md
+templates/main-memory.md
+bun.lock

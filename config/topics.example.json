@@ -1,0 +1,9 @@
+{
+  "groups": {
+    "-100XXXXXXXXXX": {
+      "name": "My Supergroup",
+      "enabled": true
+    }
+  },
+  "topics": {}
+}

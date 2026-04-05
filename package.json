@@ -1,0 +1,14 @@
+{
+  "name": "claude-topic-router",
+  "version": "0.1.0",
+  "description": "Telegram topic router for Claude Code — each topic gets its own Claude Code process with isolated memory",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts"
+  },
+  "dependencies": {
+    "grammy": "^1.21.0"
+  }
+}
