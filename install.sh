@@ -182,37 +182,22 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║  Galera installed!                           ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 
-# ─── Claude login check ──────────────────────────────────────────────────────
+# ─── Claude auth note ────────────────────────────────────────────────────────
 echo ""
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 if [[ "$GALERA_LANG" == "en" ]]; then
-  echo -e "${YELLOW}  Claude Code authentication${NC}"
+  echo -e "${YELLOW}  Note: Claude Code authentication${NC}"
+  echo "  If you haven't authenticated yet, run in a separate terminal:"
+  echo ""
+  echo "       claude login"
+  echo ""
+  echo "  It will print a URL — open it in your browser. No interactive session."
 else
-  echo -e "${YELLOW}  Авторизация Claude Code${NC}"
-fi
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-# Check if already authenticated (auth.json exists and non-empty)
-AUTH_FILE="$HOME/.claude/auth.json"
-if [[ -s "$AUTH_FILE" ]]; then
-  success "Claude Code already authenticated — skipping login"
-else
-  if [[ "$GALERA_LANG" == "en" ]]; then
-    warn "Claude Code is not authenticated yet."
-    echo "  Run this command after the install completes:"
-    echo ""
-    echo "       claude login"
-    echo ""
-    echo "  It will open a browser URL for OAuth. After login, start Galera."
-  else
-    warn "Claude Code не авторизован."
-    echo "  Выполните эту команду после установки:"
-    echo ""
-    echo "       claude login"
-    echo ""
-    echo "  Откроется ссылка для входа через браузер. После входа запустите Galera."
-  fi
+  echo -e "${YELLOW}  Примечание: авторизация Claude Code${NC}"
+  echo "  Если ещё не авторизовались, выполните в отдельном терминале:"
+  echo ""
+  echo "       claude login"
+  echo ""
+  echo "  Появится ссылка — откройте в браузере. Интерактивный сеанс не запускается."
 fi
 
 # ─── Next steps ──────────────────────────────────────────────────────────────
