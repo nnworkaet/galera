@@ -110,23 +110,51 @@ sed -i "s|/opt/galera-projects|$PROJECTS_DIR|g" config/settings.json
 # ─── Interactive config ───────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}  Required configuration${NC}"
+echo -e "${YELLOW}  Language / Язык${NC}"
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
+echo "  1) Русский"
+echo "  2) English"
+echo ""
+read -rp "  Choose / Выберите [1/2] (default: 1): " LANG_CHOICE
 
-read -rp "  Your Telegram user ID (from @userinfobot): " TG_USER_ID
-read -rp "  CEO bot token (from @BotFather):           " CEO_TOKEN
+case "$LANG_CHOICE" in
+  2)
+    GALERA_LANG="en"
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}  Required configuration${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    read -rp "  Your Telegram user ID (from @userinfobot): " TG_USER_ID
+    read -rp "  CEO bot token (from @BotFather):           " CEO_TOKEN
+    WARN_AGENTS="You can add more agents later via /new_agent in Telegram."
+    ;;
+  *)
+    GALERA_LANG="ru"
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}  Настройка${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    read -rp "  Ваш Telegram ID (узнать у @userinfobot):  " TG_USER_ID
+    read -rp "  Токен CEO бота (от @BotFather):           " CEO_TOKEN
+    WARN_AGENTS="Дополнительные агенты добавляются через /new_agent в Telegram."
+    ;;
+esac
 
 # Write .env
 cat > .env << EOF
 TELEGRAM_CEO_TOKEN=$CEO_TOKEN
 EOF
 
-# Write user ID to settings.json
+# Write user ID and language to settings.json
 sed -i "s/123456789/$TG_USER_ID/g" config/settings.json
+# Inject language field after opening brace
+sed -i "s/^{$/{\"language\": \"$GALERA_LANG\",/" config/settings.json
 
 echo ""
-warn "You can add more agents later via /new_agent in Telegram."
+warn "$WARN_AGENTS"
 
 # ─── Claude login ────────────────────────────────────────────────────────────
 echo ""

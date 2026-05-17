@@ -27,7 +27,10 @@ export interface SharedChatConfig {
   agents: AgentConfig[];
 }
 
+export type Lang = "ru" | "en";
+
 export interface Settings {
+  language?: Lang;
   telegram: {
     allowedUsers: number[];
   };

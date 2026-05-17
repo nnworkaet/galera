@@ -6,6 +6,7 @@ import { InputFile } from "grammy";
 import type { Context } from "grammy";
 
 import { loadSettings } from "./config";
+import { useI18n } from "./i18n";
 import { AgentRegistry } from "./agents/AgentRegistry";
 import { AgentProcess } from "./agents/AgentProcess";
 import { AgentFactory } from "./agents/AgentFactory";
@@ -35,6 +36,7 @@ function loadEnv(): void {
 loadEnv();
 
 const settings = loadSettings();
+const t = useI18n(settings.language ?? "ru");
 const registry = new AgentRegistry(resolve(ROOT, "config/agents.json"));
 
 // Secrets → shared memory
@@ -127,21 +129,21 @@ async function handleCeoCommand(
 
   if (trimmed === "/cancel") {
     factory.cancel(userId);
-    await ctx.api.sendMessage(chatId, "Отменено.", { message_thread_id: threadId });
+    await ctx.api.sendMessage(chatId, t.cancelled, { message_thread_id: threadId });
     return true;
   }
 
   if (trimmed === "/agents") {
     const agents = registry.getAll();
     if (!agents.length) {
-      await ctx.api.sendMessage(chatId, "Агентов нет.", { message_thread_id: threadId });
+      await ctx.api.sendMessage(chatId, t.agents_none, { message_thread_id: threadId });
     } else {
       const lines = agents.map((a) => {
         const running = runningAgents.has(a.id) ? "✅" : "❌";
-        const role = a.isOrchestrator ? "Оркестратор" : a.role;
+        const role = a.isOrchestrator ? t.agent_role_orchestrator : a.role;
         return `• ${a.name} (${a.id}) — ${role} ${running}`;
       });
-      await ctx.api.sendMessage(chatId, `Агенты:\n${lines.join("\n")}`, {
+      await ctx.api.sendMessage(chatId, `${t.agents_header}\n${lines.join("\n")}`, {
         message_thread_id: threadId,
       });
     }
@@ -160,7 +162,7 @@ async function handleCeoCommand(
     const removed = registry.remove(id);
     await ctx.api.sendMessage(
       chatId,
-      removed ? `Агент ${id} удалён.` : `Агент ${id} не найден.`,
+      removed ? t.agent_removed(id) : t.agent_not_found(id),
       { message_thread_id: threadId }
     );
     return true;
@@ -170,7 +172,7 @@ async function handleCeoCommand(
   const secretSetMatch = trimmed.match(/^\/secret_set\s+(\S+)\s+(.+)$/);
   if (secretSetMatch) {
     secrets.set(secretSetMatch[1], secretSetMatch[2].trim());
-    await ctx.api.sendMessage(chatId, `Секрет ${secretSetMatch[1]} сохранён.`, {
+    await ctx.api.sendMessage(chatId, t.secret_saved(secretSetMatch[1]), {
       message_thread_id: threadId,
     });
     return true;
@@ -180,7 +182,7 @@ async function handleCeoCommand(
     const keys = secrets.list();
     await ctx.api.sendMessage(
       chatId,
-      keys.length ? `Секреты: ${keys.join(", ")}` : "Секреты не сохранены.",
+      keys.length ? t.secrets_list(keys.join(", ")) : t.secrets_empty,
       { message_thread_id: threadId }
     );
     return true;
@@ -191,7 +193,7 @@ async function handleCeoCommand(
     const deleted = secrets.delete(secretDelMatch[1]);
     await ctx.api.sendMessage(
       chatId,
-      deleted ? `Секрет ${secretDelMatch[1]} удалён.` : `Секрет не найден.`,
+      deleted ? t.secret_deleted(secretDelMatch[1]) : t.secret_not_found,
       { message_thread_id: threadId }
     );
     return true;
@@ -199,7 +201,7 @@ async function handleCeoCommand(
 
   if (trimmed === "/secret_reload") {
     secrets.reload();
-    await ctx.api.sendMessage(chatId, "Секреты обновлены в shared memory.", {
+    await ctx.api.sendMessage(chatId, t.secrets_reloaded, {
       message_thread_id: threadId,
     });
     return true;
@@ -208,7 +210,7 @@ async function handleCeoCommand(
   if (trimmed === "/setup_general") {
     const chatNumId = ctx.chat!.id;
     if (!threadId) {
-      await ctx.api.sendMessage(chatId, "Запусти /setup_general внутри форум-топика.", {
+      await ctx.api.sendMessage(chatId, t.setup_need_topic, {
         message_thread_id: threadId,
       });
       return true;
@@ -222,11 +224,7 @@ async function handleCeoCommand(
       JSON.stringify(settings, null, 2),
       "utf-8"
     );
-    await ctx.api.sendMessage(
-      chatId,
-      `✅ Топик ${threadId} в чате ${chatNumId} настроен как General.\nПерезапусти бота для применения.`,
-      { message_thread_id: threadId }
-    );
+    await ctx.api.sendMessage(chatId, t.setup_done(threadId, chatNumId), { message_thread_id: threadId });
     return true;
   }
 
@@ -236,30 +234,26 @@ async function handleCeoCommand(
       name: a.config.name,
       projectPath: a.projectPath,
     }));
-    const status = usageTracker.getFormattedStatus(agentDescriptors, sharedLtmDir);
+    const status = usageTracker.getFormattedStatus(agentDescriptors, sharedLtmDir, settings.language ?? "ru");
     await ceo.sendToTopic(chatId, threadId, status);
     return true;
   }
 
   // /compact — сжать контекст сессии
   if (trimmed === "/compact") {
-    await ctx.api.sendMessage(chatId, "⏳ Сжимаю контексты агентов...", { message_thread_id: threadId });
+    await ctx.api.sendMessage(chatId, t.compact_start, { message_thread_id: threadId });
     const agents = Array.from(runningAgents.values());
     let done = 0;
     for (const agent of agents) {
       try {
         await agent.runClaude(
-          "Запиши ключевые факты этой сессии в topic-memory.md, затем сообщи [DONE].",
+          t.compact_prompt,
           `compact:${agent.config.id}`
         );
         done++;
       } catch {}
     }
-    await ctx.api.sendMessage(
-      chatId,
-      `✅ Готово: ${done}/${agents.length} агентов сжато.`,
-      { message_thread_id: threadId }
-    );
+    await ctx.api.sendMessage(chatId, t.compact_done(done, agents.length), { message_thread_id: threadId });
     return true;
   }
 
@@ -269,15 +263,11 @@ async function handleCeoCommand(
     const query = recallMatch[1].trim();
     const results = ltmManager.search(query);
     if (!results.length) {
-      await ctx.api.sendMessage(chatId, `🔍 Ничего не найдено по запросу: «${query}»`, {
+      await ctx.api.sendMessage(chatId, t.recall_none(query), {
         message_thread_id: threadId,
       });
     } else {
-      await ctx.api.sendMessage(
-        chatId,
-        `🔍 Найдено ${results.length} совпадений, показываю топ-3:`,
-        { message_thread_id: threadId }
-      );
+      await ctx.api.sendMessage(chatId, t.recall_found(results.length), { message_thread_id: threadId });
       for (const r of results.slice(0, 3)) {
         const filename = `ltm_${r.entry.file.replace(/\.md$/, "")}_${r.entry.anchor}.md`;
         await sendMdFile(ceo.bot, chatId, threadId, filename, r.section,
@@ -291,9 +281,9 @@ async function handleCeoCommand(
   if (trimmed === "/ltm_list") {
     const index = ltmManager.getIndex();
     if (!index.trim()) {
-      await ctx.api.sendMessage(chatId, "📭 Долгосрочная память пуста.", { message_thread_id: threadId });
+      await ctx.api.sendMessage(chatId, t.ltm_empty, { message_thread_id: threadId });
     } else {
-      await sendMdFile(ceo.bot, chatId, threadId, "_index.md", index, "📚 Индекс долгосрочной памяти (LTM)");
+      await sendMdFile(ceo.bot, chatId, threadId, "_index.md", index, t.ltm_index_caption);
     }
     return true;
   }
@@ -304,11 +294,11 @@ async function handleCeoCommand(
     const file = ltmShowMatch[1].endsWith(".md") ? ltmShowMatch[1] : `${ltmShowMatch[1]}.md`;
     const content = ltmManager.getFile(file);
     if (!content) {
-      await ctx.api.sendMessage(chatId, `❌ Файл «${file}» не найден в LTM.`, {
+      await ctx.api.sendMessage(chatId, t.ltm_not_found(file), {
         message_thread_id: threadId,
       });
     } else {
-      await sendMdFile(ceo.bot, chatId, threadId, file, content, `📄 LTM / ${file}`);
+      await sendMdFile(ceo.bot, chatId, threadId, file, content, t.ltm_file_caption(file));
     }
     return true;
   }
@@ -321,7 +311,7 @@ async function handleCeoCommand(
     const mainMem = resolve(settings.projectsRoot, "projects/_shared/main-memory.md");
     if (existsSync(mainMem)) {
       await sendMdFile(ceo.bot, chatId, threadId, "main-memory.md",
-        readFileSync(mainMem, "utf-8"), "📋 Общая память (main-memory.md)");
+        readFileSync(mainMem, "utf-8"), t.memory_main_caption);
       sent++;
     }
 
@@ -333,7 +323,7 @@ async function handleCeoCommand(
         await sendMdFile(ceo.bot, chatId, threadId,
           `topic-memory-${agent.config.id}.md`,
           readFileSync(topicMem, "utf-8"),
-          `🗒 ${agent.config.name} — память сессии`
+          t.memory_topic_caption(agent.config.name)
         );
         sent++;
       }
@@ -342,45 +332,18 @@ async function handleCeoCommand(
     // LTM index
     const ltmIndex = ltmManager.getIndex();
     if (ltmIndex.trim()) {
-      await sendMdFile(ceo.bot, chatId, threadId, "_index.md", ltmIndex,
-        "📚 Долгосрочная память — индекс (LTM)");
+      await sendMdFile(ceo.bot, chatId, threadId, "_index.md", ltmIndex, t.memory_ltm_caption);
       sent++;
     }
 
     if (sent === 0) {
-      await ctx.api.sendMessage(chatId, "📭 Файлы памяти не найдены.", { message_thread_id: threadId });
+      await ctx.api.sendMessage(chatId, t.memory_empty, { message_thread_id: threadId });
     }
     return true;
   }
 
   if (trimmed === "/help") {
-    const lines = [
-      "📋 Команды CEO:",
-      "",
-      "👥 Агенты:",
-      "/new_agent — добавить нового агента",
-      "/agents — список агентов и статус",
-      "/kill_agent <id> — остановить и удалить агента",
-      "",
-      "🔐 Секреты:",
-      "/secret_set <key> <value> — сохранить секрет",
-      "/secret_list — список ключей секретов",
-      "/secret_delete <key> — удалить секрет",
-      "/secret_reload — обновить секреты в shared memory",
-      "",
-      "🧠 Память:",
-      "/memory — все файлы памяти (MD-файлы)",
-      "/recall <запрос> — поиск в долгосрочной памяти",
-      "/ltm_list — индекс долгосрочной памяти",
-      "/ltm_show <файл> — показать файл из LTM",
-      "/compact — сжать контекст сессии агентов",
-      "",
-      "📊 Система:",
-      "/status — статистика использования и память",
-      "/setup_general — настроить этот топик как General",
-      "/cancel — отменить текущую операцию",
-    ];
-    await ctx.api.sendMessage(chatId, lines.join("\n"), { message_thread_id: threadId });
+    await ctx.api.sendMessage(chatId, t.help, { message_thread_id: threadId });
     return true;
   }
 

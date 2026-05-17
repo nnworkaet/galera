@@ -1,4 +1,5 @@
 {
+  "language": "ru",
   "telegram": {
     "allowedUsers": [123456789]
   },

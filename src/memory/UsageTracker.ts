@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import type { Lang } from "../config";
+import { useI18n } from "../i18n";
 
 interface DayStats {
   messages: number;
@@ -107,28 +109,25 @@ export class UsageTracker {
 
   getFormattedStatus(
     agents: Array<{ name: string; projectPath: string }>,
-    ltmDir: string
+    ltmDir: string,
+    lang: Lang = "ru"
   ): string {
+    const t = useI18n(lang);
     const daily = this.getDailyStats();
     const weekly = this.getWeeklyStats();
 
-    const fmtTokens = (n: number): string => {
-      if (n >= 1000) return `~${(n / 1000).toFixed(1)}k est. tokens`;
-      return `~${n} est. tokens`;
-    };
-
     const lines: string[] = [
-      `System: ${agents.length} agent${agents.length !== 1 ? "s" : ""} running`,
-      `Today: ${daily.messages} messages, ${fmtTokens(daily.estimatedTokens)}`,
-      `This week: ${weekly.messages} messages, ${fmtTokens(weekly.estimatedTokens)}`,
+      t.status_system(agents.length),
+      t.status_today(daily.messages, t.status_tokens(daily.estimatedTokens)),
+      t.status_week(weekly.messages, t.status_tokens(weekly.estimatedTokens)),
     ];
 
     const ltmFiles = ltmFileCount(ltmDir);
     const ltmKb = dirSizeKb(ltmDir);
     const ltmUpdated = ltmLastUpdated(ltmDir);
     lines.push("");
-    lines.push(`LTM: ${ltmFiles} file${ltmFiles !== 1 ? "s" : ""}, ${ltmKb.toFixed(1)} KB`);
-    lines.push(`  Last updated: ${ltmUpdated}`);
+    lines.push(t.status_ltm(ltmFiles, ltmKb.toFixed(1)));
+    lines.push(t.status_ltm_updated(ltmUpdated));
 
     const agentMemoryLines: string[] = [];
     for (const { name, projectPath } of agents) {
@@ -139,7 +138,7 @@ export class UsageTracker {
 
     if (agentMemoryLines.length > 0) {
       lines.push("");
-      lines.push("Memory (topic-memory.md):");
+      lines.push(t.status_memory_header);
       lines.push(...agentMemoryLines);
     }
 
