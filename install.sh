@@ -3,14 +3,14 @@ set -euo pipefail
 
 # ─── Galera installer ────────────────────────────────────────────────────────
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/galera/main/install.sh | bash
+#   bash <(curl -fsSL https://raw.githubusercontent.com/nnworkaet/galera/main/install.sh)
 #
 # What it does:
-#   1. Installs Node.js 22, Bun
+#   1. Installs Node.js 22, Bun, Claude Code CLI
 #   2. Clones the repo to /opt/galera
-#   3. Installs Claude Code CLI
-#   4. Copies example configs and prompts for essential values
-#   5. Creates a systemd service for auto-start
+#   3. Copies example configs and prompts for essential values
+#   4. Creates a systemd service for auto-start
+#   5. Runs claude login at the very end
 # ─────────────────────────────────────────────────────────────────────────────
 
 REPO_URL="https://github.com/nnworkaet/galera.git"
@@ -67,9 +67,9 @@ fi
 if ! command -v claude &>/dev/null; then
   info "Installing Claude Code CLI..."
   npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
-  success "Claude Code installed"
+  success "Claude Code CLI installed"
 else
-  success "Claude Code already installed"
+  success "Claude Code CLI already installed"
 fi
 
 # ─── Clone repo ──────────────────────────────────────────────────────────────
@@ -87,7 +87,6 @@ info "Installing dependencies..."
 "$HOME/.bun/bin/bun" install --quiet
 
 # ─── Config setup ────────────────────────────────────────────────────────────
-echo ""
 info "Setting up configuration..."
 
 if [[ ! -f .env ]]; then
@@ -103,11 +102,9 @@ if [[ ! -f config/agents.json ]]; then
 fi
 
 mkdir -p "$PROJECTS_DIR/projects/_shared/ltm"
-
-# Update projectsRoot in settings.json
 sed -i "s|/opt/galera-projects|$PROJECTS_DIR|g" config/settings.json
 
-# ─── Interactive config ───────────────────────────────────────────────────────
+# ─── Language ────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}  Language / Язык${NC}"
@@ -119,29 +116,27 @@ echo ""
 read -rp "  Choose / Выберите [1/2] (default: 1): " LANG_CHOICE
 
 case "$LANG_CHOICE" in
-  2)
-    GALERA_LANG="en"
-    echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}  Required configuration${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    read -rp "  Your Telegram user ID (from @userinfobot): " TG_USER_ID
-    read -rp "  CEO bot token (from @BotFather):           " CEO_TOKEN
-    WARN_AGENTS="You can add more agents later via /new_agent in Telegram."
-    ;;
-  *)
-    GALERA_LANG="ru"
-    echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}  Настройка${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    read -rp "  Ваш Telegram ID (узнать у @userinfobot):  " TG_USER_ID
-    read -rp "  Токен CEO бота (от @BotFather):           " CEO_TOKEN
-    WARN_AGENTS="Дополнительные агенты добавляются через /new_agent в Telegram."
-    ;;
+  2) GALERA_LANG="en" ;;
+  *) GALERA_LANG="ru" ;;
 esac
+
+# ─── Interactive config ───────────────────────────────────────────────────────
+echo ""
+if [[ "$GALERA_LANG" == "en" ]]; then
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${YELLOW}  Required configuration${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  read -rp "  Your Telegram user ID (from @userinfobot): " TG_USER_ID
+  read -rp "  CEO bot token (from @BotFather):           " CEO_TOKEN
+else
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${YELLOW}  Настройка${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  read -rp "  Ваш Telegram ID (узнать у @userinfobot):  " TG_USER_ID
+  read -rp "  Токен CEO бота (от @BotFather):           " CEO_TOKEN
+fi
 
 # Write .env
 cat > .env << EOF
@@ -149,22 +144,9 @@ TELEGRAM_CEO_TOKEN=$CEO_TOKEN
 EOF
 
 # Write user ID and language to settings.json
-sed -i "s/123456789/$TG_USER_ID/g" config/settings.json
-# Inject language field after opening brace
-sed -i "s/^{$/{\"language\": \"$GALERA_LANG\",/" config/settings.json
-
-echo ""
-warn "$WARN_AGENTS"
-
-# ─── Claude login ────────────────────────────────────────────────────────────
-echo ""
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}  Claude Code authentication${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-info "Starting claude login (a URL will appear — open it in your browser)..."
-echo ""
-claude login || warn "Login failed or skipped. Run 'claude login' manually before starting."
+sed -i "s/123456789/$TG_USER_ID/" config/settings.json
+# Insert language into settings.json (after first {)
+sed -i '0,/{/{s/{/{\n  "language": "'"$GALERA_LANG"'",/}' config/settings.json
 
 # ─── systemd service ─────────────────────────────────────────────────────────
 echo ""
@@ -192,30 +174,63 @@ EOF
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
 
+success "Systemd service created"
+
 # ─── Done ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  Galera installed successfully!              ║${NC}"
+echo -e "${GREEN}║  Galera installed!                           ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
+
+# ─── Claude login (last step) ────────────────────────────────────────────────
 echo ""
-echo "  Next steps:"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+if [[ "$GALERA_LANG" == "en" ]]; then
+  echo -e "${YELLOW}  Step: Claude Code login${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "  A URL will appear below. Open it in your browser to authenticate."
+  echo "  After logging in, return here — the terminal will continue."
+  echo ""
+else
+  echo -e "${YELLOW}  Шаг: авторизация Claude Code${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "  Сейчас появится ссылка. Откройте её в браузере для входа."
+  echo "  После авторизации вернитесь сюда — терминал продолжит работу."
+  echo ""
+fi
+
+claude login
+
+# ─── Next steps ──────────────────────────────────────────────────────────────
 echo ""
-echo "  1. Add your CEO bot to the Telegram group as admin"
-echo "  2. Start Galera:"
-echo "       systemctl start $SERVICE_NAME"
-echo ""
-echo "  3. In Telegram General topic, send:"
-echo "       /setup_general"
-echo "     Then restart:"
-echo "       systemctl restart $SERVICE_NAME"
-echo ""
-echo "  4. Add more agents:"
-echo "       /new_agent"
-echo ""
-echo "  Logs:"
-echo "       journalctl -u $SERVICE_NAME -f"
-echo ""
-echo "  Config files:"
-echo "       $INSTALL_DIR/.env"
-echo "       $INSTALL_DIR/config/settings.json"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+if [[ "$GALERA_LANG" == "en" ]]; then
+  echo -e "${YELLOW}  Next steps${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "  1. Add the CEO bot to your Telegram group as admin"
+  echo "  2. Start Galera:"
+  echo "       systemctl start $SERVICE_NAME"
+  echo ""
+  echo "  3. In the General topic, send /setup_general, then restart:"
+  echo "       systemctl restart $SERVICE_NAME"
+  echo ""
+  echo "  4. Add agents:   /new_agent"
+  echo "  5. View logs:    journalctl -u $SERVICE_NAME -f"
+else
+  echo -e "${YELLOW}  Следующие шаги${NC}"
+  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "  1. Добавьте CEO бота в Telegram группу как администратора"
+  echo "  2. Запустите Galera:"
+  echo "       systemctl start $SERVICE_NAME"
+  echo ""
+  echo "  3. В топике General отправьте /setup_general, затем перезапустите:"
+  echo "       systemctl restart $SERVICE_NAME"
+  echo ""
+  echo "  4. Добавить агентов:  /new_agent"
+  echo "  5. Логи:              journalctl -u $SERVICE_NAME -f"
+fi
 echo ""

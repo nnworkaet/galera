@@ -38,10 +38,11 @@ You → General topic → CEO (orchestrator) → CTO, CMO, DevOps, ... (parallel
 ## Quick Start (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nnworkaet/galera/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nnworkaet/galera/main/install.sh)
 ```
 
 The installer handles everything: Bun, repo clone, config setup, systemd service.
+`claude login` runs at the very end — it shows a URL to open in your browser, no interactive terminal.
 
 ### Manual setup
 
