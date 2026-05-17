@@ -1,5 +1,5 @@
 import { mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "fs";
-import { resolve, join } from "path";
+import { resolve, join, dirname } from "path";
 import { type Settings, type TopicMapping, type AgentConfig, getTemplatesDir } from "./config";
 
 export class ProjectFactory {
@@ -48,11 +48,14 @@ export class ProjectFactory {
     }
 
     // Create CLAUDE.md from template
+    const installDir = dirname(this.templatesDir.endsWith("/") ? this.templatesDir.slice(0, -1) : this.templatesDir);
     const claudeTemplate = readFileSync(resolve(this.templatesDir, "CLAUDE.md"), "utf-8");
     const claudeMd = claudeTemplate
       .replace("{{PROJECT_NAME}}", topicName)
       .replace("{{TOPIC_NAME}}", topicName)
-      .replace("{{CREATED_DATE}}", new Date().toISOString().split("T")[0]);
+      .replace("{{CREATED_DATE}}", new Date().toISOString().split("T")[0])
+      .replace(/\{\{INSTALL_DIR\}\}/g, installDir)
+      .replace(/\{\{PROJECTS_DIR\}\}/g, this.settings.projectsRoot);
     writeFileSync(join(projectPath, "CLAUDE.md"), claudeMd, "utf-8");
 
     // Create topic-specific memory
@@ -104,6 +107,7 @@ export class ProjectFactory {
   }
 
   private buildSharedAgentClaudeMd(agent: AgentConfig, historyFilePath: string, allAgentIds: string[]): string {
+    const installDir = dirname(this.templatesDir.endsWith("/") ? this.templatesDir.slice(0, -1) : this.templatesDir);
     const lines: string[] = [
       `# ${agent.name} — Operating Instructions`,
       ``,
@@ -116,6 +120,23 @@ export class ProjectFactory {
       `## Shared History`,
       `The full conversation history is at: ${historyFilePath}`,
       `ALWAYS read it with the Read tool before responding to understand the full context.`,
+      ``,
+      `## Server Access`,
+      `You are running on a Linux server and have full access to it.`,
+      ``,
+      `**Galera source code & config:**`,
+      `- Source: ${installDir}/src/`,
+      `- Config: ${installDir}/config/`,
+      `- Templates: ${installDir}/templates/`,
+      `- Agent data: ${this.settings.projectsRoot}/`,
+      ``,
+      `**Service management:**`,
+      `- Restart after code changes: sudo systemctl restart galera`,
+      `- Live logs: sudo journalctl -u galera -f`,
+      `- Status: sudo systemctl status galera`,
+      ``,
+      `You can edit Galera source code, install packages, and run any shell commands.`,
+      `Changes take effect after restarting the service.`,
       ``,
     ];
 

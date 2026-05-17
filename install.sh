@@ -85,6 +85,11 @@ else
   success "User '$GALERA_USER' already exists"
 fi
 
+# Give galera user full sudo (needed for self-improvement: apt, systemctl, etc.)
+echo "$GALERA_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/galera
+chmod 440 /etc/sudoers.d/galera
+success "Sudo access granted to '$GALERA_USER'"
+
 # ─── Clone repo ──────────────────────────────────────────────────────────────
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   info "Updating existing installation at $INSTALL_DIR..."
