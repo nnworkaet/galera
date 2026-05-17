@@ -1,12 +1,13 @@
 ﻿import { Bot, type Context } from "grammy";
 import { existsSync, writeFileSync, readFileSync, mkdirSync, copyFileSync } from "fs";
 import { resolve, join } from "path";
-import { type Settings, loadTopics, saveTopics, type TopicsConfig, type TopicMapping } from "./config";
+import { type Settings, loadTopics, saveTopics, type TopicsConfig, type TopicMapping, getSharedChatConfig, type SharedChatConfig } from "./config";
 import { ProcessManager } from "./process-manager";
 import { ProjectFactory } from "./project-factory";
 import { WhisperClient } from "./whisper";
 import { ContextCompactor } from "./context-compactor";
 import { MemoryManager } from "./memory-manager";
+import { SharedChatManager, AgentPool, ChatHistory } from "./shared-chat";
 
 export class Router {
   private bot: Bot;
@@ -17,6 +18,8 @@ export class Router {
   private whisper: WhisperClient;
   private compactor: ContextCompactor;
   private memoryManager: MemoryManager;
+  private sharedChatManager: SharedChatManager | null = null;
+  private sharedChatConfig: SharedChatConfig | null = null;
   // Dynamic topic name cache: "chatId:threadId" → name
   private topicNameCache = new Map<string, string>();
 
@@ -34,6 +37,25 @@ export class Router {
     this.processManager.setCleanupCallback((topicKey) => {
       this.compactor.resetCounter(topicKey);
     });
+
+    // Initialize shared chat if configured
+    const sharedChatCfg = getSharedChatConfig(settings);
+    if (sharedChatCfg) {
+      this.sharedChatConfig = sharedChatCfg;
+      const historyPath = resolve(settings.projectsRoot, sharedChatCfg.historyFile);
+      const agentsDir = resolve(settings.projectsRoot, sharedChatCfg.agentsDir);
+      const history = new ChatHistory(historyPath);
+      const pool = new AgentPool(sharedChatCfg, agentsDir, settings);
+      this.sharedChatManager = new SharedChatManager(sharedChatCfg, history, pool);
+
+      // Create project directories for all agents
+      const allAgentIds = sharedChatCfg.agents.map((a) => a.id);
+      for (const agent of sharedChatCfg.agents) {
+        this.projectFactory.createSharedAgentProject(agent, agentsDir, historyPath, allAgentIds);
+      }
+
+      console.log(`[Router] Shared chat initialized: topicId=${sharedChatCfg.topicId}, agents=[${allAgentIds.join(", ")}]`);
+    }
   }
 
   async start(): Promise<void> {
@@ -201,6 +223,13 @@ export class Router {
     if (messageText.startsWith("/")) {
       const handled = await this.handleCommand(ctx, messageText, threadId);
       if (handled) return;
+    }
+
+    // Intercept shared chat topic before normal per-topic routing
+    if (this.sharedChatManager && this.sharedChatConfig && threadId === this.sharedChatConfig.topicId) {
+      console.log(`[Router] Shared chat message: ${messageText.slice(0, 80)}...`);
+      await this.sharedChatManager.handleMessage(ctx, messageText, threadId);
+      return;
     }
 
     // Route by topic
@@ -657,6 +686,7 @@ export class Router {
     console.log("[Router] Shutting down...");
     this.memoryManager.stop();
     this.processManager.shutdown();
+    this.sharedChatManager?.shutdown();
     this.bot.stop();
     process.exit(0);
   }

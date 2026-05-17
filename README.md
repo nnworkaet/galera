@@ -1,212 +1,214 @@
-<p align="center">
-  <h1 align="center">TeleClaude</h1>
-  <p align="center">
-    <strong>Claude Code lost its Telegram integration? We bring it back — on your own terms.</strong>
-  </p>
-  <p align="center">
-    Route Telegram topics to isolated Claude Code sessions with persistent memory
-  </p>
-  <p align="center">
-    <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun" alt="Bun"></a>
-    <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.0+-3178c6?logo=typescript&logoColor=white" alt="TypeScript"></a>
-    <a href="https://core.telegram.org/bots/api"><img src="https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?logo=telegram&logoColor=white" alt="Telegram Bot API"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
-  </p>
-  <p align="center">
-    <a href="README.ru.md">Русский</a>
-  </p>
-</p>
+# Galera
+
+**Multi-agent AI system in Telegram, powered by Claude Code.**
+
+Galera runs a team of AI agents directly in your Telegram group. Each agent is a real Telegram bot with its own Claude Code process, persistent memory, and a dedicated topic in your forum group. They coordinate in a shared General topic — orchestrator delegates, specialists execute in parallel.
+
+```
+You → General topic → CEO (orchestrator) → CTO, CMO, DevOps, ... (parallel/sequential)
+```
 
 ---
 
-**TeleClaude** turns a Telegram supergroup with topics into a multi-project AI assistant. Each topic gets its own Claude Code process with an isolated working directory, persistent memory, and automatic context management.
-
-A self-hosted replacement for [OpenClaw](https://openclaw.app)'s Telegram integration — but running Claude Code locally, with full filesystem access. Uses the same OAuth authentication as Claude Code on your machine, so if you have Claude Max (or any Claude subscription) — there are no extra API costs. You can also switch between Claude models (Opus, Sonnet, Haiku) or use local models through Claude Code's model routing.
-
-## How It Works
-
-```
-Telegram Supergroup (forum mode)
-│
-├── Topic "Backend API"    →  Claude Code  →  ~/Projects/backend-api/
-├── Topic "Landing Page"   →  Claude Code  →  ~/Projects/landing-page/
-├── Topic "DevOps"         →  Claude Code  →  ~/Projects/devops/
-└── Topic "New Feature"    →  auto-creates project directory
-```
-
-You write in a Telegram topic — Claude Code responds in the same topic, with full access to that project's files.
-
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Topic Routing** | Each topic = isolated Claude Code process with its own `cwd` |
-| **Persistent Memory** | Three-level memory: personality (SOUL.md) + shared (main-memory.md) + per-topic (topic-memory.md) |
-| **Auto Project Creation** | New topics automatically get a project directory from templates |
-| **Context Compaction** | Automatic context management — saves key decisions to memory when context grows |
-| **Memory Deduplication** | Periodic cross-file dedup removes redundant information |
-| **Voice Messages** | Transcription via local Whisper ASR server (optional) |
-| **Session Continuity** | `--continue` flag preserves conversation across messages |
-| **Process Management** | Configurable TTL, concurrent process limits, idle cleanup |
-| **8 Bot Commands** | `/help` `/status` `/ttl` `/name` `/compact` `/reset` `/kill` `/memory` |
-| **No API Key Needed** | Uses OAuth from your local Claude Code — works with any Claude subscription |
-| **Model Switching** | Switch between Opus, Sonnet, Haiku, or use local models via Claude Code |
+- **Multi-bot**: every agent is a separate Telegram bot (own token, own process)
+- **Orchestrator pattern**: CEO analyses the task, delegates to specialists, collects results
+- **Parallel & sequential execution**: same paragraph = parallel, blank line between = sequential
+- **3-level memory**: session (`topic-memory.md`) → shared (`main-memory.md`) → long-term (`ltm/`)
+- **LTM pre-retrieval**: relevant LTM sections auto-injected into every agent prompt
+- **SSH / VPS access**: agents can execute commands on remote servers
+- **Typing indicators**: each agent shows live typing while working
+- **Auto-retry**: up to 2 retries with error context on failure
+- **Live agent management**: add/remove agents without restart via `/new_agent`
+- **Secrets manager**: store credentials in shared memory
+- **Usage tracking**: daily/weekly message and token stats
 
-## Quick Start
-
-**1. Install**
-
-```bash
-git clone https://github.com/devladpopov/teleclaude.git
-cd teleclaude
-bun install
-```
-
-**2. Configure**
-
-```bash
-cp .env.example .env                              # Add your Telegram bot token
-cp config/settings.example.json config/settings.json  # Set your Telegram user ID
-cp config/topics.example.json config/topics.json      # Auto-populated by the bot
-```
-
-**3. Set up templates**
-
-```bash
-cp templates/SOUL.example.md templates/SOUL.md
-cp templates/main-memory.example.md templates/main-memory.md
-# Edit both files — define your bot's personality and shared memory
-```
-
-**4. Start**
-
-```bash
-bun run start
-```
-
-Add the bot to a Telegram supergroup with topics enabled. Send a message in any topic — the bot will create a project directory and respond.
-
-## Bot Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | List all available commands |
-| `/status` | Show active processes, TTL, and feature status |
-| `/ttl N` | Set process idle timeout (1–1440 minutes) |
-| `/name <name>` | Rename current topic (updates project mapping) |
-| `/compact` | Force context compaction — save decisions to memory |
-| `/reset` | Reset session — start fresh dialog with preserved memory |
-| `/kill` | Kill current topic's Claude Code process |
-| `/memory` | Show memory file count, size, and session stats |
-
-## Architecture
-
-```
-┌──────────────────┐
-│  Telegram Bot API │
-└────────┬─────────┘
-         │
-┌────────▼─────────────────────────┐
-│  Router (grammy)                 │
-│  ├── Message routing by topic    │
-│  ├── Command handling            │
-│  ├── Memory context injection    │
-│  ├── Context Compactor           │
-│  ├── Memory Manager (dedup)      │
-│  ├── Project Factory (templates) │
-│  └── Whisper Client (optional)   │
-└────────┬─────────────────────────┘
-         │
-┌────────▼─────────────────────────┐
-│  Process Manager                 │
-│  ├── Spawn per-message process   │
-│  ├── stdin message passing       │
-│  ├── Session continuity          │
-│  ├── TTL & idle cleanup          │
-│  └── Concurrency limits          │
-└────────┬─────────────────────────┘
-         │
-┌────────▼─────────────────────────┐
-│  Claude Code CLI                 │
-│  One process per topic           │
-│  Isolated working directory      │
-│  Full filesystem access          │
-└──────────────────────────────────┘
-```
-
-## Memory System
-
-Each topic project maintains a three-level memory hierarchy:
-
-```
-project/
-├── SOUL.md              # Bot personality and communication rules
-├── main-memory.md       # Shared context across all projects (symlinked)
-├── topic-memory.md      # Topic-specific memory (updated by Claude)
-├── CLAUDE.md            # Project instructions for Claude Code
-└── memory/
-    ├── people/          # People and contacts
-    ├── services/        # Infrastructure documentation
-    ├── shared/          # Cross-project guides
-    └── projects/        # Project-specific context
-```
-
-- **SOUL.md** — copied from template on project creation
-- **main-memory.md** — symlinked so all projects share the same file
-- **topic-memory.md** — evolves over time as Claude saves key decisions
-- **memory/** — optional subdirectories for detailed knowledge base
-
-## Configuration
-
-### settings.json
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `telegram.allowedUsers` | Telegram user IDs allowed to interact | `[]` |
-| `processes.ttlMinutes` | Idle timeout before cleanup | `30` |
-| `processes.maxConcurrent` | Max parallel Claude Code processes | `5` |
-| `processes.claudePath` | Path to Claude Code CLI | `claude` |
-| `compaction.enabled` | Auto context compaction | `true` |
-| `memory.enabled` | Periodic memory revision | `true` |
-| `memory.deduplication` | Cross-file deduplication | `true` |
-| `whisper.enabled` | Voice transcription | `false` |
-| `projectsRoot` | Root directory for projects | — |
+---
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.0+
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated (OAuth login)
-- Any Claude subscription (Max, Pro, or Team) — or an API key
-- Telegram bot token from [@BotFather](https://t.me/BotFather)
-- Telegram supergroup with topics (forum mode) enabled
-- (Optional) [Whisper ASR](https://github.com/ahmetoner/whisper-asr-webservice) on `localhost:9000`
+- [Bun](https://bun.sh) ≥ 1.0
+- [Claude Code CLI](https://docs.anthropic.com/claude-code) (authenticated via `claude login`)
+- Telegram group in **Forum/Topics** mode
+- One Telegram bot token per agent (via [@BotFather](https://t.me/BotFather))
 
-> **How auth works:** TeleClaude doesn't need an API key by default. It spawns Claude Code CLI processes that use your existing OAuth session — the same way you use Claude Code in the terminal. If you're logged into Claude Code, TeleClaude just works.
+---
 
-## Security
+## Quick Start (Linux / macOS)
 
-- Only messages from `allowedUsers` are processed
-- `ANTHROPIC_API_KEY` is stripped from child process environment
-- Bot token, settings, and topic mappings are gitignored
-- Each Claude Code process runs in an isolated project directory
+```bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/galera/main/install.sh | bash
+```
 
-## Comparison with OpenClaw
+The installer handles everything: Bun, repo clone, config setup, systemd service.
 
-| | TeleClaude | OpenClaw |
-|---|---|---|
-| **Hosting** | Self-hosted (your machine) | Cloud service |
-| **AI Backend** | Claude Code CLI (full filesystem access) | API-based |
-| **Auth** | OAuth (your Claude subscription) | Managed |
-| **Cost** | Free with any Claude subscription | Separate subscription |
-| **Models** | Switch between Opus/Sonnet/Haiku + local models | Provider-dependent |
-| **Memory** | File-based, persistent, cross-project | Built-in |
-| **Customization** | Full control over prompts, memory, templates | Managed |
-| **Topics** | Telegram supergroup topics | Telegram topics |
-| **Voice** | Local Whisper (optional) | Built-in |
+### Manual setup
 
-## Author
+```bash
+# 1. Clone
+git clone https://github.com/YOUR_USERNAME/galera.git && cd galera
 
-Built by [Vladislav Popov](https://github.com/devladpopov). I write about AI tools, automation, and development workflows on my Telegram channel — [@popovvii](https://t.me/popovvii).
+# 2. Install dependencies
+bun install
+
+# 3. Copy config templates
+cp .env.example .env
+cp config/settings.example.json config/settings.json
+cp config/agents.example.json config/agents.json
+
+# 4. Fill in .env — add your bot tokens
+nano .env
+
+# 5. Edit settings.json — set your Telegram user ID and projectsRoot path
+nano config/settings.json
+
+# 6. Authenticate Claude Code
+claude login
+
+# 7. Start
+bun start
+```
+
+---
+
+## Configuration
+
+### `.env`
+
+```env
+TELEGRAM_CEO_TOKEN=7123456789:AAF...   # CEO bot token from @BotFather
+TELEGRAM_CTO_TOKEN=7987654321:AAG...   # CTO bot token
+```
+
+### `config/settings.json`
+
+| Field | Description |
+|-------|-------------|
+| `telegram.allowedUsers` | Array of Telegram user IDs allowed to interact |
+| `projectsRoot` | Directory where agent memory is stored (e.g. `/opt/galera-projects`) |
+| `processes.timeoutMinutes` | Max time per Claude task (default: 20) |
+| `multiAgent.groupChatId` | Your Telegram group ID |
+| `multiAgent.generalTopicId` | Topic ID of the General shared topic |
+
+### `config/agents.json`
+
+Created automatically via `/new_agent`. Contains one agent per entry with `id`, `name`, `tokenEnvKey`, `role`, `isOrchestrator`, `topicId`.
+
+---
+
+## First Run
+
+1. Add all bots to your Telegram group as **admins** (they need to create topics)
+2. Start: `bun start`
+3. In the **General topic**, run `/setup_general` — saves the group/topic IDs
+4. Restart: `bun start`
+5. Write your first task in General
+
+---
+
+## Commands (CEO bot)
+
+### Agents
+| Command | Description |
+|---------|-------------|
+| `/new_agent` | Add a new agent interactively |
+| `/agents` | List all agents and status |
+| `/kill_agent <id>` | Stop and remove an agent |
+
+### Memory
+| Command | Description |
+|---------|-------------|
+| `/memory` | Send all memory files as MD documents |
+| `/recall <query>` | Search long-term memory (LTM) |
+| `/ltm_list` | Show LTM index |
+| `/ltm_show <file>` | Send a specific LTM file |
+| `/compact` | Compress all agent session contexts |
+
+### System
+| Command | Description |
+|---------|-------------|
+| `/status` | Usage stats + memory sizes |
+| `/secret_set <key> <value>` | Store a secret |
+| `/secret_list` | List stored secret keys |
+| `/secret_delete <key>` | Delete a secret |
+| `/setup_general` | Configure current topic as General |
+| `/help` | Full command reference |
+
+---
+
+## Memory Architecture
+
+```
+topic-memory.md          — per-agent session notes (private, not shared)
+main-memory.md           — shared facts: servers, contacts, key decisions
+ltm/
+  _index.md              — keyword index (auto-maintained by agents)
+  servers.md             — infrastructure docs
+  projects.md            — project history
+  ...                    — any domain file agents write to
+```
+
+Agents read `_index.md` before every task and load only relevant sections.
+
+---
+
+## Orchestrator Delegation Syntax
+
+CEO delegates using `@Name:` mentions in its reply:
+
+```
+@CTO: build the landing page
+@CMO: analyse SEO for the domain
+
+@DevOps: deploy what CTO just built to production
+```
+
+- **Same paragraph** → parallel execution (both agents run simultaneously)
+- **Blank line between** → sequential (second waits for first to finish)
+
+---
+
+## Running as a systemd Service
+
+```bash
+sudo tee /etc/systemd/system/galera.service > /dev/null << 'EOF'
+[Unit]
+Description=Galera Multi-Agent Bot
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/galera
+ExecStart=/root/.bun/bin/bun run src/index.ts
+Restart=always
+RestartSec=10
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now galera
+sudo journalctl -u galera -f
+```
+
+---
+
+## Migrating to a New Server
+
+Only these need to be copied — everything else regenerates:
+
+```
+.env
+config/settings.json
+config/agents.json
+config/.secrets.json
+<projectsRoot>/projects/_shared/main-memory.md
+<projectsRoot>/projects/_shared/ltm/
+<projectsRoot>/projects/<agent>/topic-memory.md   # for each agent
+```
+
+---
 
 ## License
 

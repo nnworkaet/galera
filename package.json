@@ -1,7 +1,7 @@
 {
-  "name": "claude-topic-router",
-  "version": "0.1.0",
-  "description": "Telegram topic router for Claude Code — each topic gets its own Claude Code process with isolated memory",
+  "name": "galera",
+  "version": "1.0.0",
+  "description": "Multi-agent Telegram system powered by Claude Code — coordinate AI agents in a Telegram group to plan, code, deploy and manage projects",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {

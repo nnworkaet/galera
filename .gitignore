@@ -1,11 +1,33 @@
+# Dependencies
 node_modules/
+bun.lock
+
+# Environment & secrets
 .env
-config/topics.json
+config/.secrets.json
+
+# User-specific config (generated from *.example.json)
 config/settings.json
+config/agents.json
+config/topics.json
+config/usage.json
+
+# Memory & project data (stays on your machine/server)
+projects/
+teleclaude-projects/
+*-projects/
+
+# Build artifacts
+dist/
 .tmp/
 .tmp-build/
 nul/
-templates/openclaw-memory/
+
+# Templates (user-customized)
 templates/SOUL.md
 templates/main-memory.md
-bun.lock
+templates/openclaw-memory/
+
+# OS
+.DS_Store
+Thumbs.db

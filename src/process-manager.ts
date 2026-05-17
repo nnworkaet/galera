@@ -1,7 +1,27 @@
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, execSync, type ChildProcess } from "child_process";
 import { writeFileSync, mkdirSync } from "fs";
 import { resolve, join } from "path";
 import type { Settings } from "./config";
+
+function resolveClaudePath(configured: string): string {
+  // If already an absolute path — use it as-is
+  if (configured && configured !== "claude" && (configured.startsWith("/") || configured.match(/^[A-Z]:\\/i))) {
+    return configured;
+  }
+  // Auto-detect via where (Windows) or which (Linux/Mac)
+  const cmd = process.platform === "win32" ? "where claude" : "which claude";
+  try {
+    const found = execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] })
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)[0];
+    if (found) {
+      console.log(`[ProcessManager] Claude found: ${found}`);
+      return found;
+    }
+  } catch {}
+  return configured || "claude";
+}
 
 interface ManagedProcess {
   topicKey: string;
@@ -19,9 +39,11 @@ interface ManagedProcess {
 export class ProcessManager {
   private processes = new Map<string, ManagedProcess>();
   private settings: Settings;
+  private claudePath: string;
   private onCleanup?: (topicKey: string) => void;
 
   constructor(settings: Settings) {
+    this.claudePath = resolveClaudePath(settings.processes.claudePath);
     this.settings = settings;
   }
 
@@ -88,17 +110,28 @@ export class ProcessManager {
     // Add default flags (e.g., --dangerously-skip-permissions)
     args.push(...this.settings.processes.defaultFlags);
 
-    const claudePath = this.settings.processes.claudePath;
+    // Quote path if it contains spaces (needed for Windows shell: true)
+    const claudePath = this.claudePath.includes(" ")
+      ? `"${this.claudePath}"`
+      : this.claudePath;
 
     return new Promise<string>((resolvePromise, reject) => {
       let stdout = "";
       let stderr = "";
 
-      console.log(`[ProcessManager] Spawning: ${claudePath} (message in ${msgFile}, ${message.length} chars)`);
+      console.log(`[ProcessManager] Spawning: ${this.claudePath} (${message.length} chars)`);
 
       // Remove ANTHROPIC_API_KEY so Claude Code uses Max subscription instead of paid API
+      // Remove CLAUDECODE so nested Claude Code instances don't refuse to start
       const cleanEnv = { ...process.env };
       delete cleanEnv.ANTHROPIC_API_KEY;
+      delete cleanEnv.CLAUDECODE;
+      // Ensure git-bash is available on Windows if not already in PATH
+      if (!cleanEnv.CLAUDE_CODE_GIT_BASH_PATH) {
+        const gitBashPath = process.env.CLAUDE_CODE_GIT_BASH_PATH ||
+          "C:\\Users\\Bebra\\PortableGit\\bin\\bash.exe";
+        cleanEnv.CLAUDE_CODE_GIT_BASH_PATH = gitBashPath;
+      }
 
       const proc = spawn(claudePath, args, {
         cwd: managed.projectPath,
@@ -141,13 +174,14 @@ export class ProcessManager {
         reject(err);
       });
 
-      // Timeout: 5 minutes max per message
+      // Configurable timeout (default 20 min for long SSH/deploy tasks)
+      const timeoutMs = (this.settings.processes.timeoutMinutes ?? 20) * 60 * 1000;
       setTimeout(() => {
         if (managed.process === proc) {
           proc.kill("SIGTERM");
-          reject(new Error("Claude Code process timed out (5 min)"));
+          reject(new Error(`Claude Code process timed out (${this.settings.processes.timeoutMinutes ?? 20} min)`));
         }
-      }, 5 * 60 * 1000);
+      }, timeoutMs);
     });
   }
 

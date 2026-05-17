@@ -4,6 +4,29 @@ import { fileURLToPath } from "url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+export interface VpsConfig {
+  host: string;
+  user: string;
+  keyPath: string;
+}
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  alwaysActive: boolean;
+  soul: string;
+  systemPrompt: string;
+  vps: VpsConfig | null;
+}
+
+export interface SharedChatConfig {
+  enabled: boolean;
+  topicId: number;
+  historyFile: string;
+  agentsDir: string;
+  agents: AgentConfig[];
+}
+
 export interface Settings {
   telegram: {
     allowedUsers: number[];
@@ -13,6 +36,7 @@ export interface Settings {
     maxConcurrent: number;
     claudePath: string;
     defaultFlags: string[];
+    timeoutMinutes?: number;
   };
   compaction: {
     reserveTokens: number;
@@ -31,6 +55,15 @@ export interface Settings {
     enabled: boolean;
     url: string;
     language: string;
+  };
+  sharedChat?: SharedChatConfig;
+  multiAgent?: {
+    groupChatId: number;
+    generalTopicId: number;
+    maxChainLength?: number;
+    agentCooldownSec?: number;
+    maxMessagesPerTurn?: number;
+    tokenTimeoutSec?: number;
   };
 }
 
@@ -64,6 +97,16 @@ export function saveTopics(config: TopicsConfig): void {
 
 export function getTemplatesDir(): string {
   return resolve(ROOT, "templates");
+}
+
+export function getSharedChatConfig(settings: Settings): SharedChatConfig | null {
+  const cfg = settings.sharedChat;
+  if (!cfg?.enabled) return null;
+  if (!cfg.topicId) throw new Error("sharedChat.topicId is required");
+  if (!cfg.agents?.length) throw new Error("sharedChat.agents must not be empty");
+  const orchestrators = cfg.agents.filter(a => a.alwaysActive);
+  if (orchestrators.length !== 1) throw new Error("Exactly one alwaysActive agent (orchestrator) is required in sharedChat.agents");
+  return cfg;
 }
 
 export function getBotToken(): string {
