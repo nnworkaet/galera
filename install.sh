@@ -13,7 +13,7 @@ set -euo pipefail
 #   5. Creates a systemd service for auto-start
 # ─────────────────────────────────────────────────────────────────────────────
 
-REPO_URL="https://github.com/YOUR_USERNAME/galera.git"
+REPO_URL="https://github.com/nnworkaet/galera.git"
 INSTALL_DIR="/opt/galera"
 PROJECTS_DIR="/opt/galera-projects"
 SERVICE_NAME="galera"

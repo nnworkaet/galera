@@ -38,7 +38,7 @@ You → General topic → CEO (orchestrator) → CTO, CMO, DevOps, ... (parallel
 ## Quick Start (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/galera/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nnworkaet/galera/main/install.sh | bash
 ```
 
 The installer handles everything: Bun, repo clone, config setup, systemd service.
@@ -47,7 +47,7 @@ The installer handles everything: Bun, repo clone, config setup, systemd service
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/galera.git && cd galera
+git clone https://github.com/nnworkaet/galera.git && cd galera
 
 # 2. Install dependencies
 bun install
@@ -78,7 +78,7 @@ bun start
 
 ```env
 TELEGRAM_CEO_TOKEN=7123456789:AAF...   # CEO bot token from @BotFather
-TELEGRAM_CTO_TOKEN=7987654321:AAG...   # CTO bot token
+# More tokens are added automatically when you run /new_agent
 ```
 
 ### `config/settings.json`
@@ -99,11 +99,12 @@ Created automatically via `/new_agent`. Contains one agent per entry with `id`, 
 
 ## First Run
 
-1. Add all bots to your Telegram group as **admins** (they need to create topics)
-2. Start: `bun start`
-3. In the **General topic**, run `/setup_general` — saves the group/topic IDs
-4. Restart: `bun start`
-5. Write your first task in General
+1. Create a CEO bot via [@BotFather](https://t.me/BotFather), add it to your group as **admin**
+2. Put the token in `.env` as `TELEGRAM_CEO_TOKEN`
+3. Start: `bun start`
+4. In the **General topic**, run `/setup_general` — saves the group/topic IDs
+5. Restart: `bun start`
+6. Add more agents anytime via `/new_agent` — no restart needed
 
 ---
 
