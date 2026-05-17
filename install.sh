@@ -182,26 +182,38 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║  Galera installed!                           ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 
-# ─── Claude login (last step) ────────────────────────────────────────────────
+# ─── Claude login check ──────────────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 if [[ "$GALERA_LANG" == "en" ]]; then
-  echo -e "${YELLOW}  Step: Claude Code login${NC}"
-  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo ""
-  echo "  A URL will appear below. Open it in your browser to authenticate."
-  echo "  After logging in, return here — the terminal will continue."
-  echo ""
+  echo -e "${YELLOW}  Claude Code authentication${NC}"
 else
-  echo -e "${YELLOW}  Шаг: авторизация Claude Code${NC}"
-  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo ""
-  echo "  Сейчас появится ссылка. Откройте её в браузере для входа."
-  echo "  После авторизации вернитесь сюда — терминал продолжит работу."
-  echo ""
+  echo -e "${YELLOW}  Авторизация Claude Code${NC}"
 fi
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
 
-claude login
+# Check if already authenticated (auth.json exists and non-empty)
+AUTH_FILE="$HOME/.claude/auth.json"
+if [[ -s "$AUTH_FILE" ]]; then
+  success "Claude Code already authenticated — skipping login"
+else
+  if [[ "$GALERA_LANG" == "en" ]]; then
+    warn "Claude Code is not authenticated yet."
+    echo "  Run this command after the install completes:"
+    echo ""
+    echo "       claude login"
+    echo ""
+    echo "  It will open a browser URL for OAuth. After login, start Galera."
+  else
+    warn "Claude Code не авторизован."
+    echo "  Выполните эту команду после установки:"
+    echo ""
+    echo "       claude login"
+    echo ""
+    echo "  Откроется ссылка для входа через браузер. После входа запустите Galera."
+  fi
+fi
 
 # ─── Next steps ──────────────────────────────────────────────────────────────
 echo ""
