@@ -11,7 +11,7 @@ export class AgentProcess {
   readonly config: AgentDefinition; // mutable fields (topicId) updated in place
   readonly projectPath: string;
 
-  private pm: ProcessManager;
+  pm: ProcessManager;
   private compactor: ContextCompactor;
   private settings: Settings;
   private _username = "";

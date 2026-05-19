@@ -67,6 +67,11 @@ export interface Settings {
     agentCooldownSec?: number;
     maxMessagesPerTurn?: number;
     tokenTimeoutSec?: number;
+    historyCompressLines?: number;
+  };
+  usageLimits?: {
+    dailyTokens?: number;
+    weeklyTokens?: number;
   };
 }
 

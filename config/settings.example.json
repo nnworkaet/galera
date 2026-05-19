@@ -34,6 +34,11 @@
     "maxChainLength": 5,
     "agentCooldownSec": 5,
     "maxMessagesPerTurn": 3,
-    "tokenTimeoutSec": 1800
+    "tokenTimeoutSec": 1800,
+    "historyCompressLines": 300
+  },
+  "usageLimits": {
+    "dailyTokens": 1000000,
+    "weeklyTokens": 5000000
   }
 }

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import type { Context } from "grammy";
 import { ChatHistory } from "./ChatHistory";
 import { MessageBroker } from "./MessageBroker";
@@ -36,6 +39,8 @@ export class SharedChatManager {
   private generalTopicId: number;
   private ltmManager?: LtmManager;
 
+  private compressThreshold: number;
+
   // Concurrency guard — only one user message processed at a time
   private busy = false;
   private pending: Array<() => Promise<void>> = [];
@@ -47,6 +52,7 @@ export class SharedChatManager {
     groupChatId: number;
     generalTopicId: number;
     ltmManager?: LtmManager;
+    compressThreshold?: number;
   }) {
     this.orchestratorId = opts.orchestratorId;
     this.history = opts.history;
@@ -54,6 +60,7 @@ export class SharedChatManager {
     this.groupChatId = opts.groupChatId;
     this.generalTopicId = opts.generalTopicId;
     this.ltmManager = opts.ltmManager;
+    this.compressThreshold = opts.compressThreshold ?? 300;
   }
 
   registerAgent(agent: AgentProcess): void {
@@ -160,6 +167,57 @@ export class SharedChatManager {
         await Promise.allSettled(tasks);
       }
     }
+
+    // Auto-compress history if it has grown too large
+    await this.maybeCompressHistory(orchestrator);
+  }
+
+  private async maybeCompressHistory(orchestrator: AgentProcess): Promise<void> {
+    const lines = this.history.getLineCount();
+    if (lines < this.compressThreshold) return;
+
+    console.log(`[SharedChatManager] History at ${lines} lines (threshold ${this.compressThreshold}), compressing...`);
+    await this.runHistoryCompression(orchestrator);
+  }
+
+  private async runHistoryCompression(orchestrator: AgentProcess): Promise<void> {
+    const fullHistory = this.history.read();
+    const date = new Date().toISOString().slice(0, 10);
+
+    const prompt = [
+      `The conversation history has grown too long and must be compressed.`,
+      `Here is the full history:`,
+      ``,
+      `---`,
+      fullHistory,
+      `---`,
+      ``,
+      `Compress it into a concise summary that preserves:`,
+      `- All key decisions, outcomes, and facts`,
+      `- Server configs, credentials, or technical details mentioned`,
+      `- The last 15 messages verbatim (under "## Recent Messages")`,
+      ``,
+      `Respond with ONLY the new history content in markdown — no preamble, no explanation.`,
+      `Start with: # History (compressed ${date})`,
+      `End your response with DONE on its own line.`,
+    ].join("\n");
+
+    // Run in a temp dir so it doesn't interfere with the orchestrator's --continue session
+    const tmpDir = mkdtempSync(join(tmpdir(), "galera-compress-"));
+    try {
+      const raw = await orchestrator.pm.runOnce(tmpDir, prompt);
+      const compressed = this.stripDone(raw);
+      if (compressed.length > 200) {
+        this.history.replace(compressed);
+        console.log(`[SharedChatManager] History compressed: ${fullHistory.length} → ${compressed.length} chars`);
+      } else {
+        console.warn(`[SharedChatManager] Compression returned too little content, skipping`);
+      }
+    } catch (err: any) {
+      console.error(`[SharedChatManager] History compression failed: ${err.message}`);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   }
 
   private async runDelegate(
@@ -263,7 +321,11 @@ export class SharedChatManager {
         ``,
         `Available agents: ${agentNames || "none yet"}`,
         `To delegate: @AgentName: <task description>`,
-        `You may delegate to multiple agents.`,
+        ``,
+        `IMPORTANT: Delegated agents do NOT have access to the conversation history.`,
+        `You MUST include all necessary context directly in each task description —`,
+        `relevant facts, server addresses, previous results, expected outcomes.`,
+        `The task description must be fully self-contained.`,
       ].join("\n")
     );
   }
@@ -273,11 +335,10 @@ export class SharedChatManager {
       this.buildLtmContext(task) +
       [
         `You (${agentName}) have been delegated a task by the orchestrator.`,
+        `All context needed to complete the task is included below.`,
         ``,
-        `TASK: ${task}`,
-        ``,
-        `Conversation history: ${this.history.getFilePath()}`,
-        `Read it with the Read tool for context.`,
+        `TASK:`,
+        task,
         ``,
         `Complete the task and report results. End with [DONE].`,
       ].join("\n")

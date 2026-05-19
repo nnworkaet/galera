@@ -48,7 +48,7 @@ secrets.ensureSharedMemoryBase();
 // LTM and usage tracking
 const sharedLtmDir = resolve(settings.projectsRoot, "projects/_shared/ltm");
 const ltmManager = new LtmManager(sharedLtmDir);
-const usageTracker = new UsageTracker(resolve(ROOT, "config/usage.json"));
+const usageTracker = new UsageTracker(resolve(ROOT, "config/usage.json"), settings.usageLimits);
 
 // Multi-agent config
 const ma = settings.multiAgent;
@@ -79,6 +79,7 @@ const sharedChatManager = new SharedChatManager({
   groupChatId,
   generalTopicId,
   ltmManager,
+  compressThreshold: settings.multiAgent?.historyCompressLines ?? 300,
 });
 
 // Running agents index
@@ -365,8 +366,6 @@ async function startAgent(agent: AgentProcess, factory: AgentFactory): Promise<v
       if (text.startsWith("/")) {
         if (await handleCeoCommand(agent, ctx, text, threadId, userId, factory)) return;
       }
-      // Track usage
-      usageTracker.track(Math.ceil(text.length / 4));
       // Route through shared chat (orchestrator speaks first, then delegates)
       await sharedChatManager.handleUserMessage(ctx, text);
     };
@@ -405,6 +404,9 @@ async function startAgent(agent: AgentProcess, factory: AgentFactory): Promise<v
       if (response) await agent.sendToTopic(chatId, threadId, response);
     };
   }
+
+  // Hook real token counts into usage tracker
+  agent.pm.onTokensUsed = (input, output) => usageTracker.track(input + output);
 
   sharedChatManager.registerAgent(agent);
   runningAgents.set(def.id, agent);

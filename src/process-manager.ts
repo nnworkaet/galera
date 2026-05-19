@@ -41,6 +41,7 @@ export class ProcessManager {
   private settings: Settings;
   private claudePath: string;
   private onCleanup?: (topicKey: string) => void;
+  onTokensUsed?: (inputTokens: number, outputTokens: number) => void;
 
   constructor(settings: Settings) {
     this.claudePath = resolveClaudePath(settings.processes.claudePath);
@@ -99,7 +100,8 @@ export class ProcessManager {
 
     const args: string[] = [
       "-p",
-      "--output-format", "text",
+      "--output-format", "stream-json",
+      "--verbose",
     ];
 
     // Add --continue to resume the most recent conversation in this directory
@@ -157,13 +159,39 @@ export class ProcessManager {
       proc.on("close", (code) => {
         managed.process = null;
 
-        if (code === 0 || stdout.trim()) {
-          // Extract session ID from output if available
-          const sessionMatch = stderr.match(/session:\s*([a-f0-9-]+)/i);
-          if (sessionMatch) {
-            managed.sessionId = sessionMatch[1];
-          }
-          resolvePromise(stdout.trim());
+        // Parse stream-json: find the result event in stdout lines
+        let responseText = "";
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let sessionId = "";
+
+        for (const line of stdout.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed);
+            if (event.type === "result" && event.subtype === "success") {
+              responseText = event.result ?? "";
+              sessionId = event.session_id ?? "";
+              inputTokens = event.usage?.input_tokens ?? 0;
+              outputTokens = event.usage?.output_tokens ?? 0;
+            }
+          } catch {}
+        }
+
+        // Fallback: raw stdout if JSON parse failed (e.g. non-json mode)
+        if (!responseText && stdout.trim()) {
+          responseText = stdout.trim();
+        }
+
+        if (sessionId) managed.sessionId = sessionId;
+
+        if (inputTokens + outputTokens > 0) {
+          this.onTokensUsed?.(inputTokens, outputTokens);
+        }
+
+        if (code === 0 || responseText) {
+          resolvePromise(responseText);
         } else {
           reject(new Error(`Claude exited with code ${code}: ${stderr.trim()}`));
         }
@@ -238,6 +266,23 @@ export class ProcessManager {
 
   private generateSessionId(): string {
     return `topic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * One-shot command: no --continue, not stored in processes map.
+   * Used for history compression to avoid polluting agent sessions.
+   */
+  async runOnce(projectPath: string, message: string): Promise<string> {
+    const ephemeral: ManagedProcess = {
+      topicKey: `once:${Date.now()}`,
+      projectPath,
+      process: null,
+      sessionId: "new",
+      lastActivity: Date.now(),
+      ttlTimer: null,
+      pendingResolves: [],
+    };
+    return this.executeCommand(ephemeral, message);
   }
 
   getActiveCount(): number {

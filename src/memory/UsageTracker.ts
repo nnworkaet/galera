@@ -5,7 +5,7 @@ import { useI18n } from "../i18n";
 
 interface DayStats {
   messages: number;
-  estimatedTokens: number;
+  tokens: number;
 }
 
 interface UsageData {
@@ -72,39 +72,65 @@ function ltmLastUpdated(ltmDir: string): string {
   return latest ? new Date(latest).toISOString().slice(0, 10) : "never";
 }
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function pct(used: number, limit: number): string {
+  return `${((used / limit) * 100).toFixed(1)}%`;
+}
+
 export class UsageTracker {
   private usagePath: string;
   private data: UsageData;
+  private dailyLimit?: number;
+  private weeklyLimit?: number;
 
-  constructor(usagePath: string) {
+  constructor(usagePath: string, limits?: { dailyTokens?: number; weeklyTokens?: number }) {
     this.usagePath = usagePath;
+    this.dailyLimit = limits?.dailyTokens;
+    this.weeklyLimit = limits?.weeklyTokens;
     mkdirSync(dirname(usagePath), { recursive: true });
-    this.data = existsSync(usagePath)
-      ? JSON.parse(readFileSync(usagePath, "utf-8"))
-      : { daily: {}, weekly: {} };
+    if (existsSync(usagePath)) {
+      const raw = JSON.parse(readFileSync(usagePath, "utf-8")) as any;
+      // Migrate old estimatedTokens field
+      this.data = { daily: {}, weekly: {} };
+      for (const [k, v] of Object.entries(raw.daily ?? {})) {
+        const s = v as any;
+        this.data.daily[k] = { messages: s.messages ?? 0, tokens: s.tokens ?? s.estimatedTokens ?? 0 };
+      }
+      for (const [k, v] of Object.entries(raw.weekly ?? {})) {
+        const s = v as any;
+        this.data.weekly[k] = { messages: s.messages ?? 0, tokens: s.tokens ?? s.estimatedTokens ?? 0 };
+      }
+    } else {
+      this.data = { daily: {}, weekly: {} };
+    }
   }
 
-  track(estimatedTokens: number): void {
+  track(tokens: number): void {
     const day = todayKey();
     const week = weekKey();
 
-    if (!this.data.daily[day]) this.data.daily[day] = { messages: 0, estimatedTokens: 0 };
-    if (!this.data.weekly[week]) this.data.weekly[week] = { messages: 0, estimatedTokens: 0 };
+    if (!this.data.daily[day]) this.data.daily[day] = { messages: 0, tokens: 0 };
+    if (!this.data.weekly[week]) this.data.weekly[week] = { messages: 0, tokens: 0 };
 
     this.data.daily[day].messages += 1;
-    this.data.daily[day].estimatedTokens += estimatedTokens;
+    this.data.daily[day].tokens += tokens;
     this.data.weekly[week].messages += 1;
-    this.data.weekly[week].estimatedTokens += estimatedTokens;
+    this.data.weekly[week].tokens += tokens;
 
     writeFileSync(this.usagePath, JSON.stringify(this.data, null, 2), "utf-8");
   }
 
   getDailyStats(): DayStats {
-    return this.data.daily[todayKey()] ?? { messages: 0, estimatedTokens: 0 };
+    return this.data.daily[todayKey()] ?? { messages: 0, tokens: 0 };
   }
 
   getWeeklyStats(): DayStats {
-    return this.data.weekly[weekKey()] ?? { messages: 0, estimatedTokens: 0 };
+    return this.data.weekly[weekKey()] ?? { messages: 0, tokens: 0 };
   }
 
   getFormattedStatus(
@@ -116,10 +142,15 @@ export class UsageTracker {
     const daily = this.getDailyStats();
     const weekly = this.getWeeklyStats();
 
+    const fmtTokens = (n: number, limit?: number): string => {
+      if (limit) return `${formatTokens(n)} / ${formatTokens(limit)} токенов (${pct(n, limit)})`;
+      return `${formatTokens(n)} токенов`;
+    };
+
     const lines: string[] = [
       t.status_system(agents.length),
-      t.status_today(daily.messages, t.status_tokens(daily.estimatedTokens)),
-      t.status_week(weekly.messages, t.status_tokens(weekly.estimatedTokens)),
+      t.status_today(daily.messages, fmtTokens(daily.tokens, this.dailyLimit)),
+      t.status_week(weekly.messages, fmtTokens(weekly.tokens, this.weeklyLimit)),
     ];
 
     const ltmFiles = ltmFileCount(ltmDir);

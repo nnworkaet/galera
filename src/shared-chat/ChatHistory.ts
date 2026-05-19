@@ -28,6 +28,18 @@ export class ChatHistory {
     return readFileSync(this.filePath, "utf-8");
   }
 
+  getLineCount(): number {
+    try {
+      return this.read().split("\n").length;
+    } catch {
+      return 0;
+    }
+  }
+
+  replace(content: string): void {
+    writeFileSync(this.filePath, content.trim() + "\n", "utf-8");
+  }
+
   getFilePath(): string {
     return this.filePath;
   }
